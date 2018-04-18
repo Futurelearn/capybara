@@ -101,17 +101,21 @@ module Capybara
 
     def boot
       unless responsive?
-        Capybara::Server.ports[port_key] = port
+        start_time = Capybara::Helpers.monotonic_time
+        until responsive?
+          Capybara::Server.ports[port_key] = port
 
-        @server_thread = Thread.new do
-          Capybara.server.call(middleware, port, host)
+          @server_thread = Thread.new do
+            Capybara.server.call(middleware, port, host)
+          end
+
+          if (Capybara::Helpers.monotonic_time - start_time) > 60
+            raise "Rack application timed out during boot"
+          end
+          @server_thread.join(0.1)
         end
-
-        Timeout.timeout(60) { @server_thread.join(0.1) until responsive? }
       end
-    rescue Timeout::Error
-      raise "Rack application timed out during boot"
-    else
+
       self
     end
 
